@@ -11,9 +11,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.unity3d.player.UnityPlayer;
 
-//To extend UnityPlayerActivity, you have to copy the java class from Unity/Hub/Editor/{UnityVersion}/Editor/Data/PlaybackEngines/AndroidPlayer/Source/com/unity3d/player
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 public class MLSensorListener
 {
     private static Activity unityActivity;
@@ -26,154 +27,120 @@ public class MLSensorListener
     }
 
     //sensorName = name of the sensor you wish to listen to (Must be a sensor name valid for ML2 Device)
-    //callbackGameObjectName: in order to receive callbacks for sensor updates, you must give a gameObjectName that will be receiving the callback
-    //callbackMethodName: the name of the method/function that will be used as your callback in Unity
-    public void startSensorListening(String sensorName, String callbackGameObjectName, String callbackFunctionName)
+    //SensorDataCallback = utilizing Unity AndroidJavaProxy, please create and pass in a sensordatacallback instance
+    public void startSensorListening(String requestedSensorName, SensorDataCallback sensorCallback)
     {
-        MLSensor mlSensor;
-        try
-        {
-            mlSensor = MLSensor.forName(sensorName);
-        }
-        catch(IllegalArgumentException e)
-        {
-            Log.e(getClass().getName(), "No sensor by " + sensorName + "was found");
-            return;
-        }
-
-        if(sensorManager == null)
-        {
-            sensorManager = (SensorManager) unityActivity.getSystemService(Context.SENSOR_SERVICE);
-        }
-
-        Sensor requestedSensor = findSensor(mlSensor);
+        Sensor requestedSensor = findSensorByName(requestedSensorName);
 
         if(requestedSensor != null)
         {
-            if(!allEventListeners.containsKey(sensorName))
+            if(!allEventListeners.containsKey(requestedSensorName))
             {
-                UnitySensorEventListener sensorEventListener = new UnitySensorEventListener(requestedSensor, new UnityCallback(callbackGameObjectName, callbackFunctionName));
-                allEventListeners.put(sensorName, sensorEventListener);
+                UnitySensorEventListener sensorEventListener = new UnitySensorEventListener(requestedSensor, sensorCallback);
+                allEventListeners.put(requestedSensorName, sensorEventListener);
                 sensorEventListener.startListening(sensorManager);
             }
 
         }
     }
 
-    public void stopSensorListening(String sensorName)
+    //Get all sensors in JSON format for ease of parsing
+    public String getAvailableSensors()
     {
-       MLSensor mlSensor;
-       try
-       {
-           mlSensor = MLSensor.forName(sensorName);
-       }
-       catch(IllegalArgumentException e)
-       {
-           Log.e(getClass().getName(), "No sensor by " + sensorName + " was found");
-           return;
-       }
+        if(sensorManager == null)
+        {
+            sensorManager = (SensorManager) unityActivity.getSystemService(Context.SENSOR_SERVICE);
+        }
 
-       if(allEventListeners.containsKey(mlSensor.sensorName))
-       {
-           UnitySensorEventListener listener = allEventListeners.get(mlSensor.sensorName);
-           if (listener != null) {
-               listener.stopListening(sensorManager);
-           }
-           allEventListeners.remove(mlSensor.sensorName);
-       }
+        //get all available sensors
+        List<Sensor> allSensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
+
+        //create json entry for each sensor
+        JSONArray jsonArray = new JSONArray();
+        for (Sensor sensor : allSensors) {
+            try {
+                JSONObject sensorJson = new JSONObject();
+                sensorJson.put("name", sensor.getName());
+                sensorJson.put("type", sensor.getType());
+                sensorJson.put("vendor", sensor.getVendor());
+                sensorJson.put("version", sensor.getVersion());
+                jsonArray.put(sensorJson);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        //return json as string for parsing in Unity
+        return jsonArray.toString();
+    }
+
+    //function to stop listening to a sensor immediately
+    //requestedSensorName = name of the sensor you wish to stop listening to
+    public void stopSensorListening(String requestedSensorName)
+    {
+        Sensor requestedSensor = findSensorByName(requestedSensorName);
+
+        if(requestedSensor != null && allEventListeners.containsKey(requestedSensorName))
+        {
+            UnitySensorEventListener listener = allEventListeners.get(requestedSensorName);
+            if (listener != null) {
+                listener.stopListening(sensorManager);
+            }
+            allEventListeners.remove(requestedSensorName);
+        }
 
     }
 
-    private Sensor findSensor(MLSensor mlSensor)
+    //helper function to find a sensor by its name
+    //returns the sensor if found
+    //returns null if no sensor by the passed name is found
+    private Sensor findSensorByName(String sensorName)
     {
+        if(sensorManager == null)
+        {
+            sensorManager = (SensorManager) unityActivity.getSystemService(Context.SENSOR_SERVICE);
+        }
+
         List<Sensor> allSensorsOfType = sensorManager.getSensorList(Sensor.TYPE_ALL);
         for (Sensor sensor: allSensorsOfType)
         {
-            if(sensor.getName().contains(mlSensor.sensorName))
+            if(sensor.getName().contains(sensorName))
             {
-                Log.i(getClass().getName(), "Sensor found by name: " + mlSensor.sensorName);
+                Log.i(getClass().getName(), "Sensor found by name: " + sensorName);
                 return sensor;
             }
         }
-        Log.e(getClass().getName(), "No sensor found by name: " + mlSensor.sensorName);
+        Log.e(getClass().getName(), "No sensor found by name: " + sensorName);
         return null;
     }
 
-
-    private enum MLSensor
-    {
-        lightSensor("Ambient Light Sensor"),
-        headsetPressureSensor("Headset Pressure Sensor"),
-        computePackPressureSensor("Compute Pack Pressure Sensor"),
-        computePackGyroscopeSensor("Compute Pack Gyroscope Sensor"),
-        headsetLeftGyroscopeSensor("Headset Left Gyroscope Sensor"),
-        headsetRightGyroscopeSensor("Headset Right Gyroscope Sensor"),
-        computePackAccelerometerSensor("Compute Pack Accelerometer Sensor"),
-        headsetLeftAccelerometerSensor("Headset Left Accelerometer Sensor"),
-        headsetRightAccelerometerSensor("Headset Right Accelerometer Sensor"),
-        headsetRightUncalibratedMagnetometerSensor("Headset Right Uncalibrated Magnetometer Sensor"),
-        headsetLeftUncalibratedMagnetometerSensor("Headset Left Uncalibrated Magnetometer Sensor"),
-        headsetRightCalibratedMagnetometerSensor("Headset Right Calibrated Magnetometer Sensor"),
-        headsetLeftCalibratedMagnetometerSensor("Headset Left Calibrated Magnetometer Sensor")
-        ;
-
-        final String sensorName;
-
-        MLSensor(String sensorName)
-        {
-            this.sensorName = sensorName;
-        }
-
-        private static final MLSensor[] copyOfValues = values();
-
-        public static MLSensor forName(String name) {
-            for (MLSensor value : copyOfValues) {
-                if (value.sensorName.equals(name)) {
-                    return value;
-                }
-            }
-            return null;
-        }
-    }
-
-    private static class UnityCallback {
-        private final String gameObjectName;
-        private final String methodName;
-
-        UnityCallback(String gameObjectName, String methodName) {
-            this.gameObjectName = gameObjectName;
-            this.methodName = methodName;
-            Log.i(getClass().getName(), "Callback created for " + gameObjectName + " " + methodName);
-        }
-
-        public String getGameObjectName() {
-            return gameObjectName;
-        }
-
-        public String getMethodName() {
-            return methodName;
-        }
-    }
-
+    //class that contains all logic relevant to a sensor receiving listener events
     private static class UnitySensorEventListener implements SensorEventListener
     {
         Sensor sensor;
 
-        private UnityCallback unityCallback = null;
+        private SensorDataCallback sensorCallback = null;
 
-        public UnitySensorEventListener(Sensor requestedSensor, UnityCallback callback)
+        //constructor for UnitySensorEventListener
+        //requestedSensor = the sensor that will be listened to
+        //callback = the SensorDataCallback to send when a sensor receives update events
+        public UnitySensorEventListener(Sensor requestedSensor, SensorDataCallback callback)
         {
             Log.i(getClass().getName(), "Event listener created for " + requestedSensor.getName());
             sensor = requestedSensor;
-            unityCallback = callback;
+            sensorCallback = callback;
         }
 
+        //callback for when a sensor is updated
         @Override
         public void onSensorChanged(SensorEvent event)
         {
-            if(unityCallback != null)
+            if(sensorCallback != null)
             {
-                UnityPlayer.UnitySendMessage(unityCallback.getGameObjectName(), unityCallback.getMethodName(), Arrays.toString(event.values));
+                //get the timestamp of the update
+                long timestamp = event.timestamp;
+                //send callback
+                sensorCallback.onSensorChanged(Arrays.toString(event.values), timestamp);
             }
             else
             {
@@ -184,15 +151,27 @@ public class MLSensorListener
         @Override
         public void onAccuracyChanged(Sensor sensor, int accuracy)
         {
-
+            if(sensorCallback != null)
+            {
+                //format sensor data with name of sensor and new accuracy value
+                String sensorData = sensor.getName() + " " + accuracy;
+                //send callback
+                sensorCallback.onAccuracyChanged(sensorData);
+            }
+            else
+            {
+                Log.e(getClass().getName(), "Unity callback was null");
+            }
         }
 
+        //method to register a sensor listener
         public void startListening(SensorManager sensorManager)
         {
             Log.i(getClass().getName(), "registering sensor: " + sensor.getName());
             sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL);
         }
 
+        //method to unregister a sensor listener
         public void stopListening(SensorManager sensorManager)
         {
             sensorManager.unregisterListener(this, sensor);
