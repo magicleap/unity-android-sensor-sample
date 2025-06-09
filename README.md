@@ -64,5 +64,5 @@ Class that contains the core logic of initializing and using the android plugin.
 Class that is used as a callback for the Android Plugin.
 The class is made up of a constructor and 2 functions that share the same signature as the functions from `SensorDataCallback` in the Android Plugin Project
 
-## License 
-Put license info here
+## Copyright
+Copyright (c) 2020-present Magic Leap, Inc. All Rights Reserved. Use of this file is governed by the Developer Agreement, located here: https://www.magicleap.com/legal/software-license-agreement-ml2
