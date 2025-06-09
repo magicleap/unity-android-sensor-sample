@@ -28,7 +28,7 @@ This project illustrates:
 ## Getting Started
 ### Cloning the Repository
 ```bash
-git clone https://github.com/magicleap/AndroidSensorPlugin.git 
+git clone https://github.com/magicleap/unity-android-sensor-sample.git
 ```
 
 ### Setting Up the Android Plugin Project
